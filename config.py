@@ -28,6 +28,9 @@ BATCH_SIZE = 8
 EPOCHS = 10
 LEARNING_RATE = 1e-4
 
+#早停耐心值
+PATIENCE = 3
+
 # mel谱参数（如果后续训练VITS用到）
 sampling_rate = 24000  # EMOVIE 官方采样率 24kHz
 n_mels = 80
