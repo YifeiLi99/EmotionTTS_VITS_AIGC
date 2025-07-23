@@ -7,18 +7,18 @@ __pycache__/
 # 数据集原始文件
 data/raw/
 data/processed/
-
 # 训练模型文件
 weights/
 *.pth
+*.ckpt
 
 # 训练日志文件
 logs/
 *.log
 *.csv
-
 # 训练过程中保存的tensorboard等缓存
 runs/
+tensorboard_logs/
 
 # 虚拟环境文件
 venv/
