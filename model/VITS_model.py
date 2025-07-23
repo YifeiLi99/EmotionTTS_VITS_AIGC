@@ -36,40 +36,41 @@ class SimpleVITS(nn.Module):
 
         # 文本编码器：嵌入 + 双层 Transformer
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=4, dim_feedforward=hidden_dim)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=4, dim_feedforward=hidden_dim, batch_first=True)
         self.text_encoder = nn.TransformerEncoder(encoder_layer, num_layers=2)
 
-        # 情感融合：简单连接再线性映射到同一维度
+        # 情感融合：情绪强度映射到 embedding 维度
         self.emotion_fc = nn.Linear(emotion_dim, embed_dim)
 
-        # 解码器：卷积上采样 + 输出波形
-        self.decoder = nn.Sequential(
-            nn.Conv1d(embed_dim, hidden_dim, kernel_size=3, padding=1),
+        # 上采样模块：将 token-level 特征上采样成接近波形长度
+        self.upsample = nn.Sequential(
+            nn.ConvTranspose1d(embed_dim, hidden_dim, kernel_size=4, stride=2, padding=1),  # x2
             nn.ReLU(),
-            nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1),
+            nn.ConvTranspose1d(hidden_dim, hidden_dim, kernel_size=4, stride=2, padding=1),  # x2
             nn.ReLU(),
-            nn.Conv1d(hidden_dim, 1, kernel_size=3, padding=1)  # 输出波形
+            nn.ConvTranspose1d(hidden_dim, hidden_dim, kernel_size=4, stride=2, padding=1),  # x2
+            nn.ReLU(),
+            nn.ConvTranspose1d(hidden_dim, 1, kernel_size=4, stride=2, padding=1),  # x2 输出单通道波形
         )
 
     def forward(self, text, emotion):
         # text: [B, T], emotion: [B, 1]
-        x = self.embedding(text)  # [B, T, D]
-        x = x.permute(1, 0, 2)  # [T, B, D] 适配 Transformer
-        x = self.text_encoder(x)  # [T, B, D]
-        x = x.permute(1, 0, 2)  # [B, T, D]
 
-        # 情感调制
+        # 1. 文本嵌入编码
+        x = self.embedding(text)              # [B, T, D]
+        x = self.text_encoder(x)              # [B, T, D]
+
+        # 2. 情绪调制：简单加法
         e = self.emotion_fc(emotion).unsqueeze(1)  # [B, 1, D]
-        e = e.expand(-1, x.size(1), -1)  # [B, T, D]
-        x = x + e  # 简单相加融合情绪信息
+        e = e.expand(-1, x.size(1), -1)            # [B, T, D]
+        x = x + e                                  # [B, T, D]
 
-        # 解码成波形
-        x = x.permute(0, 2, 1)  # [B, D, T] 适配 Conv1d
-        waveform = self.decoder(x)  # [B, 1, T]
-        waveform = waveform.squeeze(1)  # [B, T]
+        # 3. 上采样：调整为类似波形长度
+        x = x.permute(0, 2, 1)        # [B, D, T] 适配 ConvTranspose1d
+        waveform = self.upsample(x)  # [B, 1, T_up]
+        waveform = waveform.squeeze(1)  # [B, T_up]
 
         return waveform
-
 
 def build_vits_model(model_type="simple", vocab_size=5000):
     if model_type == "test":

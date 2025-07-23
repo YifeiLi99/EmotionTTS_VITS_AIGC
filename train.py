@@ -68,7 +68,8 @@ def evaluate(model, val_loader):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
             outputs = model(text, emotion)
-            loss = F.mse_loss(outputs, waveform)
+            min_len = min(outputs.shape[1], waveform.shape[1])
+            loss = F.mse_loss(outputs[:, :min_len], waveform[:, :min_len])
             total_val_loss += loss.item()
     avg_val_loss = total_val_loss / len(val_loader)
     return avg_val_loss
@@ -90,7 +91,8 @@ if __name__ == "__main__":
                 waveform_lengths = batch["waveform_lengths"].to(DEVICE)
 
                 outputs = model(text, emotion)
-                loss = F.mse_loss(outputs, waveform)
+                min_len = min(outputs.shape[1], waveform.shape[1])
+                loss = F.mse_loss(outputs[:, :min_len], waveform[:, :min_len])
 
                 optimizer.zero_grad()
                 loss.backward()
