@@ -67,9 +67,13 @@ def evaluate(model, val_loader):
         for batch in tqdm(val_loader, desc="Validating", leave=False):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
+            waveform = batch["waveform"].to(DEVICE)
             outputs = model(text, emotion)
-            min_len = min(outputs.shape[1], waveform.shape[1])
-            loss = F.mse_loss(outputs[:, :min_len], waveform[:, :min_len])
+
+            B = min(outputs.shape[0], waveform.shape[0])
+            T = min(outputs.shape[1], waveform.shape[1])
+            loss = F.mse_loss(outputs[:B, :T], waveform[:B, :T])
+
             total_val_loss += loss.item()
     avg_val_loss = total_val_loss / len(val_loader)
     return avg_val_loss
@@ -89,10 +93,13 @@ if __name__ == "__main__":
                 waveform = batch["waveform"].to(DEVICE)
                 text_lengths = batch["text_lengths"].to(DEVICE)
                 waveform_lengths = batch["waveform_lengths"].to(DEVICE)
-
                 outputs = model(text, emotion)
-                min_len = min(outputs.shape[1], waveform.shape[1])
-                loss = F.mse_loss(outputs[:, :min_len], waveform[:, :min_len])
+
+                B = min(outputs.shape[0], waveform.shape[0])  # ✅ 新增：batch 对齐
+                T = min(outputs.shape[1], waveform.shape[1])  # ✅ 时间维度对齐
+                #print("输出均值:", outputs.mean().item(), "目标均值:", waveform.mean().item())
+                print(f"[DEBUG] 输出长度: {outputs.shape[1]}, waveform长度: {waveform.shape[1]}")
+                loss = F.mse_loss(outputs[:B, :T], waveform[:B, :T])
 
                 optimizer.zero_grad()
                 loss.backward()
