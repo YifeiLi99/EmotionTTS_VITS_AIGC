@@ -8,11 +8,19 @@ from data.vits_dataset import VITSEmotionDataset, char_tokenizer
 from data.collate_fn import vits_collate_fn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVICE, PROCESSED_DIR
 
-# ========== 参数设置 ==========
-jsonl_path = os.path.join(PROCESSED_DIR, "metadata_emovie.jsonl")
+# ======================== 参数设置 ========================
+JSONL_PATH = os.path.join(PROCESSED_DIR, "metadata_emovie.jsonl")
+CHECKPOINT_PATH = os.path.join(WEIGHTS_DIR, 'best_model.pt')
+LOG_PATH = os.path.join(LOG_DIR, 'train_log.txt')
+TENSORBOARD_LOG_DIR = os.path.join(LOG_DIR, 'tensorboard001')
+os.makedirs(TENSORBOARD_LOG_DIR, exist_ok=True)
 
-# ========== 数据准备 ==========
-dataset = VITSEmotionDataset(jsonl_path=jsonl_path, tokenizer=char_tokenizer)
+# ======================= 日志 =============================
+tb_writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
+log_file = open(LOG_PATH, 'w', encoding='utf-8')
+
+# ======================= 数据准备 ============================
+dataset = VITSEmotionDataset(jsonl_path=JSONL_PATH, tokenizer=char_tokenizer)
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=vits_collate_fn)
 
 
@@ -29,14 +37,18 @@ class DummyVITS(torch.nn.Module):
         return self.linear(dummy_input)
 
 
+# ======================= 模型准备 ============================
+model = DummyVITS()
+model.to(DEVICE)
+
+# ======================= 优化器 & Scheduler =================
+optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
+
+# ======================== 早停 ===================
+
+
 # ========== 训练主循环 ==========
 if __name__ == "__main__":
-
-    model = DummyVITS()
-    model.to(DEVICE)
-    optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
-    writer = SummaryWriter(LOG_DIR)
-
     step = 0
     for epoch in range(1, EPOCHS + 1):
         model.train()
@@ -66,11 +78,11 @@ if __name__ == "__main__":
             # --------- 日志记录 ---------
             if step % 10 == 0:
                 print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
-                writer.add_scalar("Loss/train", loss.item(), step)
+                tb_writer.add_scalar("Loss/train", loss.item(), step)
             step += 1
 
         # --------- 保存检查点 ---------
         ckpt_path = os.path.join(WEIGHTS_DIR, f"epoch_{epoch}.pth")
         torch.save(model.state_dict(), ckpt_path)
 
-    writer.close()
+    tb_writer.close()

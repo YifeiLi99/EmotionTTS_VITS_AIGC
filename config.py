@@ -20,9 +20,6 @@ os.makedirs(WEIGHTS_DIR, exist_ok=True)
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 
-TENSORBOARD_LOG_DIR = os.path.join(LOG_DIR, "tensorboard_logs")  # tensorboard 日志
-os.makedirs(TENSORBOARD_LOG_DIR, exist_ok=True)
-
 # ========== 模型训练参数 ==========
 #设备
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
