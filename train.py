@@ -7,8 +7,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
 from data.vits_dataset import VITSEmotionDataset, char_tokenizer, get_vocab_size_from_tokenizer
 from data.collate_fn import vits_collate_fn
-from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVICE, PROCESSED_DIR, PATIENCE
-from model.test_VITS_model import build_vits_model
+from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVICE, PROCESSED_DIR, PATIENCE, MODEL_TYPE
+from model.VITS_model import build_vits_model
 from tqdm import tqdm
 
 # ======================== 参数设置 ========================
@@ -29,6 +29,7 @@ val_dataset = VITSEmotionDataset(jsonl_path=VAL_JSONL, tokenizer=char_tokenizer)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=vits_collate_fn)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=vits_collate_fn)
 
+
 # ======================= EarlyStopping 修正版 ====================
 class EarlyStopping:
     def __init__(self, patience=10):
@@ -48,13 +49,15 @@ class EarlyStopping:
     def should_stop(self):
         return self.counter >= self.patience
 
+
 # ======================= 模型准备 ============================
-#划定词范围
+# 划定词范围
 VOCAB_SIZE = get_vocab_size_from_tokenizer(char_tokenizer)
-model = build_vits_model(vocab_size=VOCAB_SIZE).to(DEVICE)
+model = build_vits_model(model_type=MODEL_TYPE, vocab_size=VOCAB_SIZE).to(DEVICE)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 early_stopper = EarlyStopping(patience=PATIENCE)
+
 
 # ======================= 验证函数 ============================
 def evaluate(model, val_loader):
@@ -69,6 +72,7 @@ def evaluate(model, val_loader):
             total_val_loss += loss.item()
     avg_val_loss = total_val_loss / len(val_loader)
     return avg_val_loss
+
 
 # ========== 训练主循环 ==========
 if __name__ == "__main__":
@@ -86,7 +90,7 @@ if __name__ == "__main__":
                 waveform_lengths = batch["waveform_lengths"].to(DEVICE)
 
                 outputs = model(text, emotion)
-                loss = F.mse_loss(outputs, torch.zeros_like(outputs))
+                loss = F.mse_loss(outputs, waveform)
 
                 optimizer.zero_grad()
                 loss.backward()

@@ -19,8 +19,10 @@ os.makedirs(WEIGHTS_DIR, exist_ok=True)
 # 训练日志路径
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
+# =========== 选择模型 ===================
+MODEL_TYPE = "simple"
 
-# ========== 模型训练参数 ==========
+# ========== 模型训练参数 =================
 #设备
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
