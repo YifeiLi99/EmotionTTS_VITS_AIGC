@@ -8,6 +8,8 @@ from torch.utils.tensorboard import SummaryWriter
 from data.vits_dataset import VITSEmotionDataset, char_tokenizer
 from data.collate_fn import vits_collate_fn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVICE, PROCESSED_DIR, PATIENCE
+from models.vits import build_vits_model  # ✅ 新增导入正式模型构建函数
+from tqdm import tqdm  # ✅ 新增 tqdm 用于进度条
 
 # ======================== 参数设置 ========================
 TRAIN_JSONL = os.path.join(PROCESSED_DIR, "train.jsonl")
@@ -26,16 +28,6 @@ train_dataset = VITSEmotionDataset(jsonl_path=TRAIN_JSONL, tokenizer=char_tokeni
 val_dataset = VITSEmotionDataset(jsonl_path=VAL_JSONL, tokenizer=char_tokenizer)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=vits_collate_fn)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=vits_collate_fn)
-
-# ========== 占位模型 ==========
-class DummyVITS(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.linear = torch.nn.Linear(100, 100)
-
-    def forward(self, text, emotion):
-        dummy_input = torch.randn(text.shape[0], 100).to(text.device)
-        return self.linear(dummy_input)
 
 # ======================= EarlyStopping 修正版 ====================
 class EarlyStopping:
@@ -57,7 +49,7 @@ class EarlyStopping:
         return self.counter >= self.patience
 
 # ======================= 模型准备 ============================
-model = DummyVITS().to(DEVICE)
+model = build_vits_model().to(DEVICE)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
 early_stopper = EarlyStopping(patience=PATIENCE)
@@ -67,7 +59,7 @@ def evaluate(model, val_loader):
     model.eval()
     total_val_loss = 0.0
     with torch.no_grad():
-        for batch in val_loader:
+        for batch in tqdm(val_loader, desc="Validating", leave=False):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
             outputs = model(text, emotion)
@@ -82,7 +74,9 @@ if __name__ == "__main__":
     try:
         for epoch in range(1, EPOCHS + 1):
             model.train()
-            for batch in train_loader:
+            epoch_loss = 0.0
+            pbar = tqdm(train_loader, desc=f"Epoch {epoch}")
+            for batch in pbar:
                 text = batch["text"].to(DEVICE)
                 emotion = batch["emotion"].to(DEVICE)
                 waveform = batch["waveform"].to(DEVICE)
@@ -96,8 +90,10 @@ if __name__ == "__main__":
                 loss.backward()
                 optimizer.step()
 
+                epoch_loss += loss.item()
+                pbar.set_postfix({"Loss": loss.item()})
+
                 if step % 10 == 0:
-                    print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
                     tb_writer.add_scalar("Loss/train", loss.item(), step)
                     log_file.write(f"Epoch {epoch}, Step {step}, Train Loss: {loss.item():.4f}\n")
                 step += 1
