@@ -68,7 +68,7 @@ def evaluate(model, val_loader):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
             outputs = model(text, emotion)
-            loss = F.mse_loss(outputs, torch.zeros_like(outputs))
+            loss = F.mse_loss(outputs, waveform)
             total_val_loss += loss.item()
     avg_val_loss = total_val_loss / len(val_loader)
     return avg_val_loss
