@@ -73,6 +73,11 @@ class VITSEmotionDataset(Dataset):
             "waveform": waveform.squeeze(0)  # 去掉通道维度，shape: [T]
         }
 
+#获取 vocab 大小
+def get_vocab_size_from_tokenizer(tokenizer):
+    test_chars = [chr(i) for i in range(0x20, 0xFFFF)]  # 常见字符范围
+    token_ids = [tokenizer(c)[0] for c in test_chars if tokenizer(c)]
+    return max(token_ids) + 1
 
 # 示例 tokenizer（将每个字符映射为其 Unicode 编码）
 def char_tokenizer(text):

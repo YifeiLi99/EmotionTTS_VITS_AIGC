@@ -5,11 +5,11 @@ from torch.nn import functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.tensorboard import SummaryWriter
-from data.vits_dataset import VITSEmotionDataset, char_tokenizer
+from data.vits_dataset import VITSEmotionDataset, char_tokenizer, get_vocab_size_from_tokenizer
 from data.collate_fn import vits_collate_fn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVICE, PROCESSED_DIR, PATIENCE
-from models.vits import build_vits_model  # ✅ 新增导入正式模型构建函数
-from tqdm import tqdm  # ✅ 新增 tqdm 用于进度条
+from model.test_VITS_model import build_vits_model
+from tqdm import tqdm
 
 # ======================== 参数设置 ========================
 TRAIN_JSONL = os.path.join(PROCESSED_DIR, "train.jsonl")
@@ -49,9 +49,11 @@ class EarlyStopping:
         return self.counter >= self.patience
 
 # ======================= 模型准备 ============================
-model = build_vits_model().to(DEVICE)
+#划定词范围
+VOCAB_SIZE = get_vocab_size_from_tokenizer(char_tokenizer)
+model = build_vits_model(vocab_size=VOCAB_SIZE).to(DEVICE)
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 early_stopper = EarlyStopping(patience=PATIENCE)
 
 # ======================= 验证函数 ============================
