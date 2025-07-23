@@ -39,7 +39,7 @@ class DummyVITS(torch.nn.Module):
 
 # ======================= EarlyStopping 修正版 ====================
 class EarlyStopping:
-    def __init__(self, patience=5):
+    def __init__(self, patience=10):
         self.patience = patience
         self.best_val_loss = float('inf')
         self.counter = 0
@@ -79,46 +79,52 @@ def evaluate(model, val_loader):
 # ========== 训练主循环 ==========
 if __name__ == "__main__":
     step = 0
-    for epoch in range(1, EPOCHS + 1):
-        model.train()
-        for batch in train_loader:
-            text = batch["text"].to(DEVICE)
-            emotion = batch["emotion"].to(DEVICE)
-            waveform = batch["waveform"].to(DEVICE)
-            text_lengths = batch["text_lengths"].to(DEVICE)
-            waveform_lengths = batch["waveform_lengths"].to(DEVICE)
+    try:
+        for epoch in range(1, EPOCHS + 1):
+            model.train()
+            for batch in train_loader:
+                text = batch["text"].to(DEVICE)
+                emotion = batch["emotion"].to(DEVICE)
+                waveform = batch["waveform"].to(DEVICE)
+                text_lengths = batch["text_lengths"].to(DEVICE)
+                waveform_lengths = batch["waveform_lengths"].to(DEVICE)
 
-            outputs = model(text, emotion)
-            loss = F.mse_loss(outputs, torch.zeros_like(outputs))
+                outputs = model(text, emotion)
+                loss = F.mse_loss(outputs, torch.zeros_like(outputs))
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-            if step % 10 == 0:
-                print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
-                tb_writer.add_scalar("Loss/train", loss.item(), step)
-            step += 1
+                if step % 10 == 0:
+                    print(f"Epoch {epoch}, Step {step}, Loss: {loss.item():.4f}")
+                    tb_writer.add_scalar("Loss/train", loss.item(), step)
+                    log_file.write(f"Epoch {epoch}, Step {step}, Train Loss: {loss.item():.4f}\n")
+                step += 1
 
-        # ========== 每轮验证 ==========
-        val_loss = evaluate(model, val_loader)
-        print(f"Epoch {epoch}, Val Loss: {val_loss:.4f}")
-        tb_writer.add_scalar("Loss/val", val_loss, epoch)
-        scheduler.step(val_loss)
+            # ========== 每轮验证 ==========
+            val_loss = evaluate(model, val_loader)
+            print(f"Epoch {epoch}, Val Loss: {val_loss:.4f}")
+            tb_writer.add_scalar("Loss/val", val_loss, epoch)
+            log_file.write(f"Epoch {epoch}, Val Loss: {val_loss:.4f}\n")
+            log_file.flush()
+            scheduler.step(val_loss)
 
-        # ========== 保存最优模型 & EarlyStopping ==========
-        if early_stopper.step(val_loss):
-            torch.save(model.state_dict(), CHECKPOINT_PATH)
-            print(f"✅ 最优模型已保存: {CHECKPOINT_PATH}")
-        else:
-            print(f"😴 验证集无提升，EarlyStopping 计数: {early_stopper.counter}/{early_stopper.patience}")
+            # ========== 保存最优模型 & EarlyStopping ==========
+            if early_stopper.step(val_loss):
+                torch.save(model.state_dict(), CHECKPOINT_PATH)
+                print(f"✅ 最优模型已保存: {CHECKPOINT_PATH}")
+            else:
+                print(f"😴 验证集无提升，EarlyStopping 计数: {early_stopper.counter}/{early_stopper.patience}")
 
-        if early_stopper.should_stop():
-            print("⛔ 提前停止：验证集损失连续未提升")
-            break
+            if early_stopper.should_stop():
+                print("⛔ 提前停止：验证集损失连续未提升")
+                break
 
-        # 每轮保存一次权重
-        torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, f"epoch_{epoch}.pth"))
+    except KeyboardInterrupt:
+        print("🛑 手动中断，保存当前模型为 interrupt_model.pth")
+        torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "interrupt_model.pth"))
 
-    tb_writer.close()
-    log_file.close()
+    finally:
+        tb_writer.close()
+        log_file.close()
