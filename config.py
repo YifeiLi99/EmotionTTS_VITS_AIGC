@@ -1,4 +1,5 @@
 import os
+import torch
 
 # ========== 基础路径设置 ==========
 ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -11,26 +12,24 @@ PROCESSED_DIR = os.path.join(DATA_ROOT, "processed")
 RAW_DATA_DIR = os.path.join(RAW_DIR, "EMOVIE DATASET", "wavs")  # 原始音频路径
 RAW_LABELS_FILE = os.path.join(RAW_DIR, "EMOVIE DATASET", "labels.csv")  # labels.csv 路径
 
-#OUTPUT_JSONL_FILE = os.path.join(PROCESSED_DIR, "metadata_emovie.jsonl")  # 输出 JSONL 文件
-#LABEL_MAP_FILE = os.path.join(PROCESSED_DIR, "polarity_map.json")  # 标签映射表输出路径（字符串版本）
-
-# 特征提取后保存路径
-#feature_dir = os.path.join(PROCESSED_DIR, "processed")  # mel谱等特征保存路径
-#os.makedirs(feature_dir, exist_ok=True)
-
 # 模型输出路径
-weights_dir = os.path.join(ROOT, "weights")  # 训练好的模型保存路径
-os.makedirs(weights_dir, exist_ok=True)
+WEIGHTS_DIR = os.path.join(ROOT, "weights")  # 训练好的模型保存路径
+os.makedirs(WEIGHTS_DIR, exist_ok=True)
 
 # 训练日志路径
-tensorboard_log_dir = os.path.join(ROOT, "logs")  # tensorboard 日志
-os.makedirs(tensorboard_log_dir, exist_ok=True)
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+TENSORBOARD_LOG_DIR = os.path.join(LOG_DIR, "tensorboard_logs")  # tensorboard 日志
+os.makedirs(TENSORBOARD_LOG_DIR, exist_ok=True)
 
 # ========== 模型训练参数 ==========
+#设备
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-batch_size = 16
-learning_rate = 1e-4
-epochs = 100
+BATCH_SIZE = 8
+EPOCHS = 10
+LEARNING_RATE = 1e-4
 
 # mel谱参数（如果后续训练VITS用到）
 sampling_rate = 24000  # EMOVIE 官方采样率 24kHz
