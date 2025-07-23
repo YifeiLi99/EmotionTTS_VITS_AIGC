@@ -1,10 +1,11 @@
+###用于把JSONL文件，变换为VITS模型所需要的输入格式
+
 import json
 import torch
 from torch.utils.data import Dataset
 import torchaudio
 from config import PROCESSED_DIR
 import os
-
 
 class VITSEmotionDataset(Dataset):
     # 自定义用于 VITS 训练的情感语音合成数据集加载器

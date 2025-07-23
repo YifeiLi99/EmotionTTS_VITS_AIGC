@@ -1,3 +1,5 @@
+###用于把最原始的散乱的训练集文件，整理成一个JSONL文件，录入信息方便后续操作
+
 import os
 import json
 import csv

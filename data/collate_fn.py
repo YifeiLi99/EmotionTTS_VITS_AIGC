@@ -1,8 +1,9 @@
+###用于将多个不同的batch合并在一起。如果文字或者语音长度不一，就加padding变成一样长。
+
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import os
 from config import PROCESSED_DIR
-
 
 def vits_collate_fn(batch):
     """
