@@ -22,6 +22,27 @@ os.makedirs(LOG_DIR, exist_ok=True)
 # =========== 选择模型 ===================
 MODEL_TYPE = "simple"
 
+# 情感模块
+fusion_method = "concat"
+text_dim = 256
+emotion_dim = 64
+
+# 持续时间预测
+duration_predictor_config = {
+    "in_channels": 320,  # 等于 text_encoder_dim + emotion_dim（如256+64）
+    "filter_channels": 256,
+    "kernel_size": 3,
+    "dropout": 0.5,
+    "num_layers": 2
+}
+
+# PosteriorEncoder模块
+in_channels = 80  # mel通道数
+hidden_channels = 192
+latent_dim = 64
+kernel_size = 5
+num_layers = 6
+
 # ========== 模型训练参数 =================
 #设备
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
