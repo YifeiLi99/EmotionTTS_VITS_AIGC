@@ -317,6 +317,11 @@ class FullVITS(nn.Module):
         x_dec = regulated.permute(0, 2, 1)  # [B, C, T] → 匹配 Conv1d 输入
         waveform = self.decoder(x_dec).squeeze(1)  # [B, 1, T] → [B, T]
 
+        #debug
+        print(f"[DEBUG] regulated shape: {regulated.shape}")
+        print(f"[DEBUG] waveform shape: {waveform.shape}")
+        print(f"[DEBUG] waveform max: {waveform.max().item():.6f}, min: {waveform.min().item():.6f}, mean: {waveform.mean().item():.6f}")
+
         return waveform, z_post, mu, log_var, z_p, log_det
 
 

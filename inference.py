@@ -1,10 +1,9 @@
 import os
 import torch
 import torchaudio
-from model.VITS_model import build_vits_model
-from config import DEVICE, MODEL_TYPE, WEIGHTS_DIR
+from config import DEVICE, WEIGHTS_DIR, MODEL_TYPE
 from data.vits_dataset import char_tokenizer, get_vocab_size_from_tokenizer
-import numpy as np
+from model.VITS_model import build_vits_model
 
 # ----------------------------
 # 1. 加载模型
@@ -19,43 +18,34 @@ model.eval()
 print(f"✅ 已加载模型权重: {ckpt_path}")
 
 # ----------------------------
-# 2. 准备输入数据
+# 2. 准备输入文本和情绪
 # ----------------------------
-text = "我真的非常开心。"  # 你想测试的文本
-emotion_id = 0             # 改成你模型支持的情绪编号：0=高兴，1=悲伤，2=愤怒 等
+text = "今天的天气真不错啊，我们一起去郊游吧！"
+text_tensor = torch.LongTensor([char_tokenizer(text)]).to(DEVICE)
 
-# 文本编码
-text_ids = char_tokenizer(text)
-text_tensor = torch.LongTensor(text_ids).unsqueeze(0).to(DEVICE)  # [1, T]
-text_lengths = torch.LongTensor([len(text_ids)]).to(DEVICE)
-
-# 情绪编码
-emotion_tensor = torch.LongTensor([[emotion_id]]).float().to(DEVICE)  # [1, 1] => FloatTensor
+# 用随机值模拟 64 维情绪向量 (VITS 基于情绪 embedding)
+emotion_tensor = torch.randn(1, 1).to(DEVICE)  # 适配情绪融合模块的 Linear(64, hidden_dim)
 
 # ----------------------------
-# 3. 构造 mel（暂用 dummy，模型内部实际可能忽略）
+# 3. 构造 mel（可选）
 # ----------------------------
-mel_dummy = torch.randn(1, 80, 100).to(DEVICE)  # 只是为了打通结构，可替换为真实 mel
+mel_dummy = torch.randn(1, 80, 100).to(DEVICE)  # 模拟 mel，仅为结构通畅
 
 # ----------------------------
-# 4. 推理生成 waveform
+# 4. 模型推理
 # ----------------------------
 with torch.no_grad():
     waveform_pred, *_ = model(
         text_tensor,
         emotion_tensor,
         mel=mel_dummy
-    )  # 输出: [B, T]
+    )
 
 # ----------------------------
-# 5. 保存输出音频
+# 5. 音频归一化并保存
 # ----------------------------
-output_dir = "output"
-os.makedirs(output_dir, exist_ok=True)
-output_path = os.path.join(output_dir, "test.wav")
-
-# 防止太小声，可适度放大
-waveform_pred = waveform_pred.cpu().clamp(-1, 1) * 2.5
-
-torchaudio.save(output_path, waveform_pred, sample_rate=22050)
-print(f"✅ 合成完毕，输出音频: {output_path}")
+waveform_pred = waveform_pred.cpu()
+waveform_pred = waveform_pred / waveform_pred.abs().max() * 0.9  # 标准化防止爆音
+output_path = "output.wav"
+torchaudio.save(output_path, waveform_pred.T, sample_rate=22050)
+print(f"✅ 音频已保存到: {output_path}")
