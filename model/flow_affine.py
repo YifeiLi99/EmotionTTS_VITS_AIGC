@@ -38,7 +38,8 @@ class AffineCouplingLayer(nn.Module):
         x0, x1 = x.chunk(2, dim=1)
         h = self.net(x0)
         log_s, t = h.chunk(2, dim=1)
-        s = torch.tanh(log_s)  # 限制范围防止不稳定
+        #限制仿射流中的缩放系数s，不让log_det爆炸
+        s = 0.01 * torch.tanh(log_s)  # 限制范围防止不稳定
         x1 = x1 * torch.exp(s) + t
         z = torch.cat([x0, x1], dim=1)
         log_det = torch.sum(s, dim=[1, 2])  # [B]
@@ -48,7 +49,8 @@ class AffineCouplingLayer(nn.Module):
         z0, z1 = z.chunk(2, dim=1)
         h = self.net(z0)
         log_s, t = h.chunk(2, dim=1)
-        s = torch.tanh(log_s)
+        #限制仿射流中的缩放系数s
+        s = 0.01 * torch.tanh(log_s)
         z1 = (z1 - t) * torch.exp(-s)
         x = torch.cat([z0, z1], dim=1)
         return x

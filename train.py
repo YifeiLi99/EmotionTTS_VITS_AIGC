@@ -67,7 +67,7 @@ def evaluate(model, val_loader):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
             waveform = batch["waveform"].to(DEVICE)
-            mel = waveform_to_mel(waveform)  # [B, 80, T']
+            mel = waveform_to_mel(waveform).to(DEVICE)  # [B, 80, T']
 
             waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=mel)
             B = min(waveform_pred.shape[0], waveform.shape[0])
@@ -96,7 +96,7 @@ if __name__ == "__main__":
                 waveform = batch["waveform"].to(DEVICE)
                 text_lengths = batch["text_lengths"].to(DEVICE)
                 waveform_lengths = batch["waveform_lengths"].to(DEVICE)
-                mel = waveform_to_mel(waveform)  # [B, 80, T']
+                mel = waveform_to_mel(waveform).to(DEVICE)  # [B, 80, T']
 
                 # 模型输出六项
                 waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=mel)
@@ -113,6 +113,7 @@ if __name__ == "__main__":
                 loss, recon_loss, kl_loss, flow_loss = vits_loss(
                     waveform_pred, waveform_gt, mu, log_var, z_p, log_det
                 )
+                #print(f"[DEBUG] log_det: {log_det.mean().item():.2f}, z_p_norm: {z_p.norm().item():.2f}")
 
                 optimizer.zero_grad()
                 loss.backward()

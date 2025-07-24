@@ -31,7 +31,8 @@ def vits_loss(waveform_pred, waveform_gt, mu, log_var, z_p, log_det):
     # 3. Flow Loss（负对数似然）
     # 注意：log_det 为 [B]，z_p 为 [B, C, T]
     log_prob = -0.5 * torch.sum(z_p ** 2 + math.log(2 * math.pi), dim=[1, 2])  # [B]
-    flow_loss = torch.mean(-log_prob - log_det)  # NLL
+    #平衡各项 loss，避免 flow dominate 一切
+    flow_loss = 0.001 * torch.mean(-log_prob - log_det)  # NLL
 
     total_loss = recon_loss + kl_loss + flow_loss
     return total_loss, recon_loss, kl_loss, flow_loss
