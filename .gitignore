@@ -20,6 +20,10 @@ logs/
 runs/
 tensorboard_logs/
 
+#输出内容
+output/
+
+
 # 虚拟环境文件
 venv/
 .env

@@ -114,6 +114,7 @@ if __name__ == "__main__":
                     waveform_pred, waveform_gt, mu, log_var, z_p, log_det
                 )
                 #print(f"[DEBUG] log_det: {log_det.mean().item():.2f}, z_p_norm: {z_p.norm().item():.2f}")
+                #print(f"[DEBUG] 当前实际 batch size: {text.shape[0]}")
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -134,14 +135,20 @@ if __name__ == "__main__":
                     tb_writer.add_scalar("Loss/recon", recon_loss.item(), step)
                     tb_writer.add_scalar("Loss/kl", kl_loss.item(), step)
                     tb_writer.add_scalar("Loss/flow", flow_loss.item(), step)
-                    log_file.write(f"Epoch {epoch}, Step {step}, Train Loss: {loss.item():.4f}\n")
+                    log_file.write(
+                        f"Epoch {epoch}, Step {step}, "
+                        f"Train Total Loss: {loss.item():.4f}, "
+                        f"Recon: {recon_loss.item():.4f}, KL: {kl_loss.item():.4f}, Flow: {flow_loss.item():.4f}, "
+                        f"log_det: {log_det.mean().item():.2f}, z_p_norm: {z_p.norm().item():.2f}, mu_var: {log_var.exp().mean().item():.4f}, "
+                        f"waveform_norm: {waveform.norm().item():.2f}, pred_norm: {waveform_pred.norm().item():.2f}\n"
+                    )
                 step += 1
 
             # ========== 每轮验证 ==========
             val_loss = evaluate(model, val_loader)
             print(f"Epoch {epoch}, Val Loss: {val_loss:.4f}")
             tb_writer.add_scalar("Loss/val", val_loss, epoch)
-            log_file.write(f"Epoch {epoch}, Val Loss: {val_loss:.4f}\n")
+            log_file.write(f"Epoch {epoch}, Val Loss: {val_loss:.4f}\n\n")
             log_file.flush()
             scheduler.step(val_loss)
 

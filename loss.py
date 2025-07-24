@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import math
+from loss_stft import STFTLoss
 
 def vits_loss(waveform_pred, waveform_gt, mu, log_var, z_p, log_det):
     """
@@ -20,7 +21,13 @@ def vits_loss(waveform_pred, waveform_gt, mu, log_var, z_p, log_det):
         flow_loss:  Flow NLL
     """
     # 1. 重构误差
-    recon_loss = F.mse_loss(waveform_pred, waveform_gt)
+    # 初始化
+    stft_loss_fn = STFTLoss().to(waveform_pred.device)
+    # 重建损失
+    recon_l1 = F.l1_loss(waveform_pred, waveform_gt)
+    recon_stft = stft_loss_fn(waveform_pred, waveform_gt)
+    # 融合两个重建损失
+    recon_loss = recon_l1 + recon_stft * 1.0  # STFT 权重可调
 
     # 2. KL Loss
     kl_loss = 0.5 * torch.mean(torch.sum(
@@ -34,5 +41,6 @@ def vits_loss(waveform_pred, waveform_gt, mu, log_var, z_p, log_det):
     #平衡各项 loss，避免 flow dominate 一切
     flow_loss = 0.001 * torch.mean(-log_prob - log_det)  # NLL
 
-    total_loss = recon_loss + kl_loss + flow_loss
+    # 加 loss 权重
+    total_loss = 1.0 * recon_loss + 1.0 * kl_loss + 0.001 * flow_loss
     return total_loss, recon_loss, kl_loss, flow_loss

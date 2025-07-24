@@ -47,12 +47,12 @@ num_layers = 6
 #设备
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-BATCH_SIZE = 4
-EPOCHS = 10
+BATCH_SIZE = 128
+EPOCHS = 100
 LEARNING_RATE = 1e-4
 
 #早停耐心值
-PATIENCE = 3
+PATIENCE = 10
 
 # mel谱参数（如果后续训练VITS用到）
 sampling_rate = 24000  # EMOVIE 官方采样率 24kHz
