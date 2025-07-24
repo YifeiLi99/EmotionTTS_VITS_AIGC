@@ -12,12 +12,12 @@ class EmotionFusion(nn.Module):
         self.emotion_proj = nn.Linear(emotion_input_dim, emotion_hidden_dim)
 
         if self.fusion_method == "concat":
-            self.output_dim = text_dim + emotion_hidden_dim
+            self.output_dim = int(text_dim + emotion_hidden_dim)
         elif self.fusion_method == "add":
             assert text_dim == emotion_hidden_dim, "Add方式要求text和emotion维度一致"
-            self.output_dim = text_dim
+            self.output_dim = int(text_dim)
         elif self.fusion_method == "film":
-            self.output_dim = text_dim
+            self.output_dim = int(text_dim)
             self.film_layer = nn.Linear(emotion_hidden_dim, text_dim * 2)
         else:
             raise ValueError(f"Unknown fusion method: {fusion_method}")

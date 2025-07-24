@@ -324,8 +324,13 @@ class FullVITS(nn.Module):
         self.length_regulator = LengthRegulator()
 
         #### 7. Decoder: waveform生成模块（可复用 HiFi-GAN 或精简版）（声码器 / 波形解码器）
-
-        pass
+        self.decoder = nn.Sequential(
+            nn.Conv1d(self.emo_text_dim, 256, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.Conv1d(256, 128, kernel_size=5, padding=2),
+            nn.ReLU(),
+            nn.Conv1d(128, 1, kernel_size=5, padding=2),  # 输出一维波形
+        )
 
     def forward(self, text, emotion, mel=None):
         # 1. 文本编码部分
@@ -352,8 +357,9 @@ class FullVITS(nn.Module):
         # 6. 长度调节器
         regulated = self.length_regulator(fused_emb, durations)  # [B, T', C]
 
-        # Dummy decoder：直接加一层线性生成 fake waveform
-        waveform = torch.tanh(regulated.mean(dim=-1))  # [B, T']，占位返回
+        # 7.解码器
+        x_dec = regulated.permute(0, 2, 1)  # [B, C, T] → 匹配 Conv1d 输入
+        waveform = self.decoder(x_dec).squeeze(1)  # [B, 1, T] → [B, T]
 
         return waveform, z_post, mu, log_var, z_p, log_det
 

@@ -10,6 +10,7 @@ from data.collate_fn import vits_collate_fn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVICE, PROCESSED_DIR, PATIENCE, MODEL_TYPE
 from model.VITS_model import build_vits_model
 from tqdm import tqdm
+from loss import vits_loss
 
 # ======================== 参数设置 ========================
 TRAIN_JSONL = os.path.join(PROCESSED_DIR, "train.jsonl")
@@ -28,7 +29,6 @@ train_dataset = VITSEmotionDataset(jsonl_path=TRAIN_JSONL, tokenizer=char_tokeni
 val_dataset = VITSEmotionDataset(jsonl_path=VAL_JSONL, tokenizer=char_tokenizer)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=vits_collate_fn)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=vits_collate_fn)
-
 
 # ======================= EarlyStopping 修正版 ====================
 class EarlyStopping:
@@ -49,7 +49,6 @@ class EarlyStopping:
     def should_stop(self):
         return self.counter >= self.patience
 
-
 # ======================= 模型准备 ============================
 # 划定词范围
 VOCAB_SIZE = get_vocab_size_from_tokenizer(char_tokenizer)
@@ -57,7 +56,6 @@ model = build_vits_model(model_type=MODEL_TYPE, vocab_size=VOCAB_SIZE).to(DEVICE
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 early_stopper = EarlyStopping(patience=PATIENCE)
-
 
 # ======================= 验证函数 ============================
 def evaluate(model, val_loader):
@@ -68,16 +66,19 @@ def evaluate(model, val_loader):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
             waveform = batch["waveform"].to(DEVICE)
-            outputs = model(text, emotion)
 
-            B = min(outputs.shape[0], waveform.shape[0])
-            T = min(outputs.shape[1], waveform.shape[1])
-            loss = F.mse_loss(outputs[:B, :T], waveform[:B, :T])
+            waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=waveform)
+            B = min(waveform_pred.shape[0], waveform.shape[0])
+            T = min(waveform_pred.shape[1], waveform.shape[1])
+            waveform_pred = waveform_pred[:B, :T]
+            waveform_gt = waveform[:B, :T]
+
+            loss, _, _, _ = vits_loss(waveform_pred, waveform_gt, mu, log_var, z_p, log_det)
+            total_val_loss += loss.item()
 
             total_val_loss += loss.item()
     avg_val_loss = total_val_loss / len(val_loader)
     return avg_val_loss
-
 
 # ========== 训练主循环 ==========
 if __name__ == "__main__":
@@ -88,28 +89,47 @@ if __name__ == "__main__":
             epoch_loss = 0.0
             pbar = tqdm(train_loader, desc=f"Epoch {epoch}")
             for batch in pbar:
+                #数据导入，移至gpu
                 text = batch["text"].to(DEVICE)
                 emotion = batch["emotion"].to(DEVICE)
                 waveform = batch["waveform"].to(DEVICE)
                 text_lengths = batch["text_lengths"].to(DEVICE)
                 waveform_lengths = batch["waveform_lengths"].to(DEVICE)
-                outputs = model(text, emotion)
 
-                B = min(outputs.shape[0], waveform.shape[0])  # ✅ 新增：batch 对齐
-                T = min(outputs.shape[1], waveform.shape[1])  # ✅ 时间维度对齐
-                #print("输出均值:", outputs.mean().item(), "目标均值:", waveform.mean().item())
-                print(f"[DEBUG] 输出长度: {outputs.shape[1]}, waveform长度: {waveform.shape[1]}")
-                loss = F.mse_loss(outputs[:B, :T], waveform[:B, :T])
+                # 模型输出六项
+                waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=waveform)
+
+                # 对齐长度（输出和GT波形对齐）
+                B = min(waveform_pred.shape[0], waveform.shape[0])   #batch 对齐
+                T = min(waveform_pred.shape[1], waveform.shape[1])   #时间维度（文字）对齐
+
+                # 对 waveform_pred 和 waveform 做裁剪
+                waveform_pred = waveform_pred[:B, :T]
+                waveform_gt = waveform[:B, :T]
+
+                # 调用 VITS 损失函数
+                loss, recon_loss, kl_loss, flow_loss = vits_loss(
+                    waveform_pred, waveform_gt, mu, log_var, z_p, log_det
+                )
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
                 epoch_loss += loss.item()
-                pbar.set_postfix({"Loss": loss.item()})
+                #进度条展示信息
+                pbar.set_postfix({
+                    "Total": loss.item(),
+                    "Recon": recon_loss.item(),
+                    "KL": kl_loss.item(),
+                    "Flow": flow_loss.item()
+                })
 
                 if step % 10 == 0:
-                    tb_writer.add_scalar("Loss/train", loss.item(), step)
+                    tb_writer.add_scalar("Loss/total", loss.item(), step)
+                    tb_writer.add_scalar("Loss/recon", recon_loss.item(), step)
+                    tb_writer.add_scalar("Loss/kl", kl_loss.item(), step)
+                    tb_writer.add_scalar("Loss/flow", flow_loss.item(), step)
                     log_file.write(f"Epoch {epoch}, Step {step}, Train Loss: {loss.item():.4f}\n")
                 step += 1
 
