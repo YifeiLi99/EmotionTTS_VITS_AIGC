@@ -13,7 +13,7 @@ class Flip(nn.Module):
 
     def forward(self, x, mask=None):
         # 交换 channel 维度顺序，增强耦合维度
-        return x.flip(1), 0.0  # 第二个返回值 log_det 恒为0
+        return x.flip(1), torch.tensor(0.0, device=x.device)  # 第二个返回值 log_det 恒为0
 
     def reverse(self, x, mask=None):
         # 翻转是可逆操作，flip 两次即还原
@@ -41,7 +41,7 @@ class ResidualCouplingLayer(nn.Module):
         h = self.net(x0)            # 基于 x0 生成残差项
         x1 = x1 + h                 # 加性耦合：x1 += f(x0)
         z = torch.cat([x0, x1], dim=1)  # 拼接还原
-        log_det = 0.0
+        log_det = torch.tensor(0.0, device=x.device)
         return z, log_det
 
     def reverse(self, z, mask=None):

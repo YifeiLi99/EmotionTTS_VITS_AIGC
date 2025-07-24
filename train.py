@@ -67,8 +67,9 @@ def evaluate(model, val_loader):
             text = batch["text"].to(DEVICE)
             emotion = batch["emotion"].to(DEVICE)
             waveform = batch["waveform"].to(DEVICE)
+            mel = waveform_to_mel(waveform)  # [B, 80, T']
 
-            waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=waveform)
+            waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=mel)
             B = min(waveform_pred.shape[0], waveform.shape[0])
             T = min(waveform_pred.shape[1], waveform.shape[1])
             waveform_pred = waveform_pred[:B, :T]
@@ -118,12 +119,13 @@ if __name__ == "__main__":
                 optimizer.step()
 
                 epoch_loss += loss.item()
+
                 #进度条展示信息
                 pbar.set_postfix({
-                    "Total": loss.item(),
-                    "Recon": recon_loss.item(),
-                    "KL": kl_loss.item(),
-                    "Flow": flow_loss.item()
+                    "Total_loss": loss.item(),
+                    "Recon_loss": recon_loss.item(),
+                    "KL_loss": kl_loss.item(),
+                    "Flow_loss": flow_loss.item()
                 })
 
                 if step % 10 == 0:
