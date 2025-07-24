@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import math
 from model.emotion_fusion import EmotionFusion
 from config import fusion_method
-from model.flow import ResidualCouplingBlock
+from model.flow_affine import ResidualCouplingBlock
 from model.posterior_encoder import PosteriorEncoder
 
 

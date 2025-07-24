@@ -6,23 +6,22 @@ class Flip(nn.Module):
     """
     对称变换。用于交换通道顺序：x[:, 0::2] <-> x[:, 1::2]
     x = [x0, x1, x2, x3] → flip → [x3, x2, x1, x0]
-    增强不同维度之间的耦合能力
+    增强耦合结构的表达能力
     """
     def __init__(self):
         super().__init__()
-
     def forward(self, x, mask=None):
         # 交换 channel 维度顺序，增强耦合维度
         return x.flip(1), torch.tensor(0.0, device=x.device)  # 第二个返回值 log_det 恒为0
-
     def reverse(self, x, mask=None):
         # 翻转是可逆操作，flip 两次即还原
         return x.flip(1)
 
-class ResidualCouplingLayer(nn.Module):
+class AffineCouplingLayer(nn.Module):
     """
-    加性耦合层（Additive Coupling Layer）
-    输入张量分为两部分，前一半作为条件生成变换参数
+        仿射耦合层（Affine Coupling Layer）
+        x1 = x1 * exp(s) + t
+        log_det = sum(s)
     """
     def __init__(self, channels, hidden_channels, kernel_size=5):
         super().__init__()
@@ -32,22 +31,25 @@ class ResidualCouplingLayer(nn.Module):
             nn.ReLU(),
             nn.Conv1d(hidden_channels, hidden_channels, kernel_size, padding=kernel_size // 2),
             nn.ReLU(),
-            nn.Conv1d(hidden_channels, channels // 2, kernel_size=1)
+            nn.Conv1d(hidden_channels, channels, kernel_size=1)  # 输出 s 和 t
         )
 
     def forward(self, x, mask=None):
-        # x: [B, C, T]
-        x0, x1 = x.chunk(2, dim=1)  # 分为两部分 [B, C//2, T]
-        h = self.net(x0)            # 基于 x0 生成残差项
-        x1 = x1 + h                 # 加性耦合：x1 += f(x0)
-        z = torch.cat([x0, x1], dim=1)  # 拼接还原
-        log_det = torch.tensor(0.0, device=x.device)
+        x0, x1 = x.chunk(2, dim=1)
+        h = self.net(x0)
+        log_s, t = h.chunk(2, dim=1)
+        s = torch.tanh(log_s)  # 限制范围防止不稳定
+        x1 = x1 * torch.exp(s) + t
+        z = torch.cat([x0, x1], dim=1)
+        log_det = torch.sum(s, dim=[1, 2])  # [B]
         return z, log_det
 
     def reverse(self, z, mask=None):
         z0, z1 = z.chunk(2, dim=1)
         h = self.net(z0)
-        z1 = z1 - h  # 反操作：减去
+        log_s, t = h.chunk(2, dim=1)
+        s = torch.tanh(log_s)
+        z1 = (z1 - t) * torch.exp(-s)
         x = torch.cat([z0, z1], dim=1)
         return x
 
@@ -62,7 +64,7 @@ class ResidualCouplingBlock(nn.Module):
         self.flows = nn.ModuleList()
         for i in range(num_flows):
             self.flows.append(
-                ResidualCouplingLayer(
+                AffineCouplingLayer(
                     channels=channels,
                     hidden_channels=hidden_channels,
                     kernel_size=kernel_size
@@ -72,7 +74,7 @@ class ResidualCouplingBlock(nn.Module):
 
     # 训练阶段，z_post → z_p
     def forward(self, x, mask=None):
-        log_det_tot = 0
+        log_det_tot = 0.0
         for flow in self.flows:
             x, log_det = flow(x, mask=mask)
             log_det_tot += log_det
