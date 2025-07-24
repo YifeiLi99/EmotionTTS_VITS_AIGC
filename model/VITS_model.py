@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from emotion_fusion import EmotionFusion
 
 # 位置编码模块
 class PositionalEncoding(nn.Module):
@@ -12,7 +13,24 @@ class PositionalEncoding(nn.Module):
         # 创建空张量，初始化
         # 和下面的embedding大小一致
         pe = torch.zeros(max_len, d_model)
+        # 构造位置索引
+        position = torch.arange(0, max_len).unsqueeze(1)
+        # 控制维度频率
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        # 填入sin，cos
+        pe[:, 0::2] = torch.sin(position * div_term)  # 偶数列
+        pe[:, 1::2] = torch.cos(position * div_term)  # 奇数列
+        # 加batch维度
+        pe = pe.unsqueeze(0)  # [1, max_len, d_model]
+        # 定义为模型的“常量”，会被保存但不参与训练
+        self.register_buffer('pe', pe)
 
+    def forward(self, x):
+        """
+        x: [B, T, D]  → 输出：加了位置偏置信息的 [B, T, D]
+        """
+        x = x + self.pe[:, :x.size(1), :]  # 取前T个位置
+        return x
 
 
 class TestVITS(nn.Module):
@@ -99,33 +117,56 @@ class FullVITS(nn.Module):
     def __init__(self, vocab_size=5000, emotion_dim=1, hidden_dim=256):
         super(FullVITS, self).__init__()
 
-        #### 1. TextEncoder: transformer
-        #嵌入层（Embedding）
+        #### 1. TextEncoder: transformer（文本编码器）
+        # 词向量映射（Embedding）
         self.embedding = nn.Embedding(vocab_size, hidden_dim)
+        # 位置信息注入（PositionalEncoding）
+        self.positional_encoding = PositionalEncoding(hidden_dim)
+        # 使用encoder的block（编码器层）
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim,
+            nhead=4,
+            dim_feedforward=hidden_dim * 4,
+            batch_first=True
+        )
+        # encoder是多个encoder layer拼的（编码器）
+        self.text_encoder = nn.TransformerEncoder(encoder_layer, num_layers=6)
 
         #### 2. EmotionEmbedding: 映射+融合
 
 
 
-        #### 3. PosteriorEncoder: mel -> latent
+        #### 3. PosteriorEncoder: mel -> latent（后验编码器）
 
 
 
-        #### 4. DurationPredictor: 音素持续时间建模
+
+        #### 4. DurationPredictor: 音素持续时间建模（持续时间预测器）
 
 
 
-        #### 5. Normalizing Flow
+        #### 5. Normalizing Flow（正则化流）
+
+        #5. Length Regulator（长度调节器）
 
 
 
-        #### 6. Decoder: waveform生成模块（可复用 HiFi-GAN 或精简版）
+        #### 6. Decoder: waveform生成模块（可复用 HiFi-GAN 或精简版）（声码器 / 波形解码器）
 
 
 
         pass
 
     def forward(self, text, emotion, mel):
+        # 1.文本编码部分
+        x = self.embedding(text)  # [B, T] → [B, T, D]
+        x = self.positional_encoding(x)  # 添加位置信息
+        text_features = self.text_encoder(x)  # Transformer 编码后输出 [B, T, D]
+
+
+
+
+
         # 后续我们将逐步实现前向传播
         pass
 
