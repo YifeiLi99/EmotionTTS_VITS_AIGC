@@ -20,7 +20,7 @@ os.makedirs(WEIGHTS_DIR, exist_ok=True)
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
 # =========== 选择模型 ===================
-MODEL_TYPE = "simple"
+MODEL_TYPE = "full"
 
 # 情感模块
 fusion_method = "concat"
@@ -47,7 +47,7 @@ num_layers = 6
 #设备
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-BATCH_SIZE = 8
+BATCH_SIZE = 1
 EPOCHS = 10
 LEARNING_RATE = 1e-4
 

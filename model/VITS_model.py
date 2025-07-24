@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from emotion_fusion import EmotionFusion
+from model.emotion_fusion import EmotionFusion
 from config import fusion_method
 
 
@@ -52,7 +52,7 @@ class DurationPredictor(nn.Module):
                               kernel_size,
                               padding=(kernel_size - 1) // 2),
                     nn.ReLU(),
-                    nn.LayerNorm(filter_channels),
+                    nn.BatchNorm1d(filter_channels),
                     nn.Dropout(dropout)
                 )
             )
@@ -318,7 +318,7 @@ class FullVITS(nn.Module):
 
         pass
 
-    def forward(self, text, emotion, mel):
+    def forward(self, text, emotion, mel=None):
         # 1. 文本编码部分
         x = self.embedding(text)  # [B, T] → [B, T, D]
         x = self.positional_encoding(x)  # 添加位置信息
@@ -341,10 +341,12 @@ class FullVITS(nn.Module):
         return  waveform
 
 
-def build_vits_model(model_type="simple", vocab_size=5000):
+def build_vits_model(model_type="test", vocab_size=5000):
     if model_type == "test":
         return TestVITS(vocab_size=vocab_size)
     elif model_type == "simple":
         return SimpleVITS(vocab_size=vocab_size)
+    elif model_type == "full":
+        return FullVITS(vocab_size=vocab_size)
     else:
         raise ValueError(f"❌ 不支持的模型类型: {model_type}")
