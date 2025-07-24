@@ -77,6 +77,68 @@ class DurationPredictor(nn.Module):
 
         return out
 
+#文字与音频帧对齐模块
+class LengthRegulator(nn.Module):
+    """
+    根据预测的 duration，将字符隐表示复制扩展，实现对齐
+    """
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, durations):
+        """
+        Args:
+            x: [B, T, C] 文本隐表示（T为字符数）
+            durations: [B, T] 每个 token 的持续时间（整数）
+        Returns:
+            output: [B, T_total, C] 拉长后的帧表示
+        """
+        output = []
+        for batch_x, batch_d in zip(x, durations):  # 遍历每个 batch
+            expanded = self._expand(batch_x, batch_d)
+            output.append(expanded)
+
+        # 将不同 batch pad 到相同长度
+        output = self._pad(output)
+        return output  # [B, max_T, C]
+
+    def _expand(self, enc, dur):
+        """
+        Args:
+            enc: [T, C]
+            dur: [T]
+        Returns:
+            expanded: [sum(dur), C]
+        """
+        out = []
+        for i, d in enumerate(dur):
+            repeat_times = max(int(d.item()), 0)
+            out.append(enc[i].unsqueeze(0).repeat(repeat_times, 1))  # [d, C]
+        if len(out) > 0:
+            return torch.cat(out, dim=0)  # [T_total, C]
+        else:
+            return torch.zeros((0, enc.size(-1)), device=enc.device)
+
+    def _pad(self, batch):
+        """
+        将 batch 中不同长度的序列 pad 到统一长度
+        Args:
+            batch: List of [T_i, C]
+        Returns:
+            Tensor: [B, max_T, C]
+        """
+        max_len = max([item.size(0) for item in batch])
+        out = []
+        for item in batch:
+            pad_len = max_len - item.size(0)
+            if pad_len > 0:
+                pad_tensor = torch.zeros((pad_len, item.size(1)), device=item.device)
+                padded = torch.cat([item, pad_tensor], dim=0)
+            else:
+                padded = item
+            out.append(padded.unsqueeze(0))  # [1, T, C]
+        return torch.cat(out, dim=0)  # [B, T, C]
+
 # 后验分布编码模块
 class PosteriorEncoder(nn.Module):
     def __init__(self, in_channels, hidden_channels, latent_dim, kernel_size=5, num_layers=6):
