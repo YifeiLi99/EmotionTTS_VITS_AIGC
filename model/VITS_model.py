@@ -286,33 +286,35 @@ class FullVITS(nn.Module):
         self.text_encoder = nn.TransformerEncoder(encoder_layer, num_layers=6)
 
         #### 2. EmotionEmbedding: 映射+融合
-        self.emotion_embedding = nn.Linear(emotion_dim, 64)
         self.emotion_fusion = EmotionFusion(
             fusion_method=fusion_method,  # 如 "concat"
             text_dim=256,  # TextEncoder 输出维度
-            emotion_dim=64  # 你设置的情绪向量维度
+            emotion_input_dim=1,
+            emotion_hidden_dim=64  # 你设置的情绪向量维度
         )
         #记录情绪融合后的维度
         self.emo_text_dim = self.emotion_fusion.output_dim
 
-        #### 4. DurationPredictor: 音素持续时间建模（持续时间预测器）
+        #### 3. DurationPredictor: 音素持续时间建模（持续时间预测器）
         self.duration_predictor = DurationPredictor(
-            in_channels=text_encoder_dim,
+            in_channels=self.emo_text_dim,
             filter_channels=256,
             kernel_size=3,
             dropout=0.5,
             num_layers=2
         )
 
-        #### 3. PosteriorEncoder: mel -> latent（后验编码器）
+        #### 4.Length Regulator（长度调节器）
+        self.length_regulator = LengthRegulator()
+
+        #### 5. PosteriorEncoder: mel -> latent（后验编码器）
 
 
 
-        #### 5. Normalizing Flow（正则化流）
+        #### 6. Normalizing Flow（正则化流）
 
-        # 5. Length Regulator（长度调节器）
 
-        #### 6. Decoder: waveform生成模块（可复用 HiFi-GAN 或精简版）（声码器 / 波形解码器）
+        #### 7. Decoder: waveform生成模块（可复用 HiFi-GAN 或精简版）（声码器 / 波形解码器）
 
         pass
 
@@ -323,17 +325,20 @@ class FullVITS(nn.Module):
         text_features = self.text_encoder(x)  # Transformer 编码后输出 [B, T, D]
 
         # 2. 情绪嵌入（从标量变向量）
-        # 假设 emotion 是 [B, 1]，映射成 [B, 64]
-        emotion_emb = self.emotion_embedding(emotion)  # ← 你需要添加这个映射层
-
-        # 3. 情绪融合
-        fused_emb = self.emotion_fusion(text_features, emotion_emb)  # [B, T, D+E]
+        fused_emb = self.emotion_fusion(text_features, emotion)  # [B, T, D+E]
 
         # 4. 持续时间预测
-        log_durations = self.duration_predictor(text_hidden_states, mask=text_mask)
+        log_durations = self.duration_predictor(fused_emb.permute(0, 2, 1), mask=None)
+        # 将 log_durations 变为整数 duration
+        durations = torch.clamp(torch.round(torch.exp(log_durations.squeeze(1))), min=1).long()  # [B, T]
 
-        # 后续我们将逐步实现前向传播
-        pass
+        # 5. 长度调节器
+        regulated = self.length_regulator(fused_emb, durations)  # [B, T', C]
+
+        # Dummy decoder：直接加一层线性生成 fake waveform
+        waveform = torch.tanh(regulated.mean(dim=-1))  # [B, T']，占位返回
+
+        return  waveform
 
 
 def build_vits_model(model_type="simple", vocab_size=5000):
