@@ -5,6 +5,7 @@ import math
 from model.emotion_fusion import EmotionFusion
 from config import fusion_method
 from model.flow import ResidualCouplingBlock
+from model.posterior_encoder import PosteriorEncoder
 
 
 # 位置编码模块
@@ -139,51 +140,6 @@ class LengthRegulator(nn.Module):
                 padded = item
             out.append(padded.unsqueeze(0))  # [1, T, C]
         return torch.cat(out, dim=0)  # [B, T, C]
-
-# 后验分布编码模块
-class PosteriorEncoder(nn.Module):
-    def __init__(self, in_channels, hidden_channels, latent_dim, kernel_size=5, num_layers=6):
-        """
-        Args:
-            in_channels: 输入 mel 的通道数，通常为 80
-            hidden_channels: 卷积中间层通道数
-            latent_dim: 输出的隐变量维度
-            kernel_size: 卷积核大小
-            num_layers: 卷积层堆叠数量
-        """
-        super().__init__()
-        self.convs = nn.ModuleList()
-        for i in range(num_layers):
-            self.convs.append(
-                nn.Sequential(
-                    nn.Conv1d(in_channels if i == 0 else hidden_channels,
-                              hidden_channels,
-                              kernel_size,
-                              padding=kernel_size // 2),
-                    nn.LayerNorm(hidden_channels),
-                    nn.ReLU()
-                )
-            )
-        # 输出两路：均值和 log_var
-        self.proj_mean = nn.Conv1d(hidden_channels, latent_dim, kernel_size=1)
-        self.proj_log_var = nn.Conv1d(hidden_channels, latent_dim, kernel_size=1)
-    def forward(self, x):
-        """
-        Args:
-            x: [B, mel_channels, T]
-        Returns:
-            z: [B, latent_dim, T]
-            mu: [B, latent_dim, T]
-            log_var: [B, latent_dim, T]
-        """
-        for conv in self.convs:
-            x = conv(x)
-        mu = self.proj_mean(x)
-        log_var = self.proj_log_var(x)
-        std = torch.exp(0.5 * log_var)
-        eps = torch.randn_like(std)
-        z = mu + std * eps  # 重参数技巧
-        return z, mu, log_var
 
 
 class TestVITS(nn.Module):

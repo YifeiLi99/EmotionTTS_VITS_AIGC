@@ -11,6 +11,7 @@ from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, LOG_DIR, WEIGHTS_DIR, DEVI
 from model.VITS_model import build_vits_model
 from tqdm import tqdm
 from loss import vits_loss
+from utils.audio_processing import waveform_to_mel
 
 # ======================== 参数设置 ========================
 TRAIN_JSONL = os.path.join(PROCESSED_DIR, "train.jsonl")
@@ -76,7 +77,6 @@ def evaluate(model, val_loader):
             loss, _, _, _ = vits_loss(waveform_pred, waveform_gt, mu, log_var, z_p, log_det)
             total_val_loss += loss.item()
 
-            total_val_loss += loss.item()
     avg_val_loss = total_val_loss / len(val_loader)
     return avg_val_loss
 
@@ -95,9 +95,10 @@ if __name__ == "__main__":
                 waveform = batch["waveform"].to(DEVICE)
                 text_lengths = batch["text_lengths"].to(DEVICE)
                 waveform_lengths = batch["waveform_lengths"].to(DEVICE)
+                mel = waveform_to_mel(waveform)  # [B, 80, T']
 
                 # 模型输出六项
-                waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=waveform)
+                waveform_pred, z_post, mu, log_var, z_p, log_det = model(text, emotion, mel=mel)
 
                 # 对齐长度（输出和GT波形对齐）
                 B = min(waveform_pred.shape[0], waveform.shape[0])   #batch 对齐
