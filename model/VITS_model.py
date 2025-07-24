@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import math
 from model.emotion_fusion import EmotionFusion
 from config import fusion_method
+from model.flow import ResidualCouplingBlock
 
 
 # 位置编码模块
@@ -292,7 +293,7 @@ class FullVITS(nn.Module):
             emotion_input_dim=1,
             emotion_hidden_dim=64  # 你设置的情绪向量维度
         )
-        #记录情绪融合后的维度
+        # 记录情绪融合后的维度
         self.emo_text_dim = self.emotion_fusion.output_dim
 
         #### 3. DurationPredictor: 音素持续时间建模（持续时间预测器）
@@ -304,15 +305,23 @@ class FullVITS(nn.Module):
             num_layers=2
         )
 
-        #### 4.Length Regulator（长度调节器）
+        #### 4. PosteriorEncoder: mel -> latent（后验编码器）
+        self.posterior_encoder = PosteriorEncoder(
+            in_channels=80,  # mel 特征维度
+            hidden_channels=256,  # 中间层维度
+            latent_dim=192  # 隐空间维度（可调）
+        )
+
+        #### 5. Normalizing Flow（正则化流）
+        self.flow = ResidualCouplingBlock(
+            channels=192,  # 与 PosteriorEncoder 输出 latent_dim 保持一致
+            hidden_channels=256,
+            kernel_size=5,
+            num_flows=4
+        )
+
+        #### 6.Length Regulator（长度调节器）
         self.length_regulator = LengthRegulator()
-
-        #### 5. PosteriorEncoder: mel -> latent（后验编码器）
-
-
-
-        #### 6. Normalizing Flow（正则化流）
-
 
         #### 7. Decoder: waveform生成模块（可复用 HiFi-GAN 或精简版）（声码器 / 波形解码器）
 
@@ -327,18 +336,26 @@ class FullVITS(nn.Module):
         # 2. 情绪嵌入（从标量变向量）
         fused_emb = self.emotion_fusion(text_features, emotion)  # [B, T, D+E]
 
-        # 4. 持续时间预测
+        # 3. 持续时间预测
         log_durations = self.duration_predictor(fused_emb.permute(0, 2, 1), mask=None)
         # 将 log_durations 变为整数 duration
         durations = torch.clamp(torch.round(torch.exp(log_durations.squeeze(1))), min=1).long()  # [B, T]
 
-        # 5. 长度调节器
+        # 4. 后验编码器（仅训练阶段使用），提取 z_post
+        if mel is not None:
+            z_post, mu, log_var = self.posterior_encoder(mel)  # [B, latent_dim, T]
+        # 5. flow，将 z_post → z_p
+            z_p, log_det = self.flow(z_post)
+        else:
+            z_post, mu, log_var, z_p, log_det = None, None, None, None, None
+
+        # 6. 长度调节器
         regulated = self.length_regulator(fused_emb, durations)  # [B, T', C]
 
         # Dummy decoder：直接加一层线性生成 fake waveform
         waveform = torch.tanh(regulated.mean(dim=-1))  # [B, T']，占位返回
 
-        return  waveform
+        return waveform, z_post, mu, log_var, z_p, log_det
 
 
 def build_vits_model(model_type="test", vocab_size=5000):
