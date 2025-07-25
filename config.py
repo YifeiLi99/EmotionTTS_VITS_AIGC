@@ -21,6 +21,10 @@ RAW_DATA_DIR = NOW_DATASET / "wavs"
 # labels.csv 路径
 RAW_LABELS_FILE = NOW_DATASET / "labels.csv"
 
+# MFA工具路径
+UTILS_DIR = ROOT / "utils"
+MFA_DICT = UTILS_DIR / "MFA" / "mandarin_mfa.dict"
+MFA_ZIP = UTILS_DIR / "MFA" / "mandarin_mfa.zip"
 
 # ========== 模型输出路径 ==========
 WEIGHTS_DIR = ROOT / "weights"  # 训练好的模型保存路径

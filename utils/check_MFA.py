@@ -35,20 +35,18 @@ empty_labs = []
 bad_encoding = []
 
 for lab in LAB_DIR.glob("*.lab"):
+    raw_bytes = lab.read_bytes()
+    detected = chardet.detect(raw_bytes)
+    encoding = detected['encoding']
     try:
-        raw_bytes = lab.read_bytes()
-        encoding = chardet.detect(raw_bytes)['encoding']
-        if encoding.lower() != 'utf-8':
-            bad_encoding.append((lab.name, encoding))
+        # 尝试 UTF-8 解码
         text = raw_bytes.decode('utf-8').strip()
-
         if not text:
             empty_labs.append(lab.name)
-        elif any(c in text for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,?!；，。？！" ):
+        elif any(c in text for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,?!；，。？！"):
             illegal_labs.append((lab.name, text))
-
-    except Exception as e:
-        bad_encoding.append((lab.name, f"读取失败: {e}"))
+    except UnicodeDecodeError as e:
+        bad_encoding.append((lab.name, encoding))
 
 print(f"❌ 空白 .lab 文件: {len(empty_labs)}")
 if empty_labs:

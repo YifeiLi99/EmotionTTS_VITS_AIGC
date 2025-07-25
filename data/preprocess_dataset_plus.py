@@ -5,6 +5,7 @@
 import json
 import csv
 from config import RAW_DATA_DIR, NOW_DATASET, PROCESSED_DATASET_DIR, RAW_LABELS_FILE
+from config import MFA_ZIP, MFA_DICT
 from tqdm import tqdm
 import shutil
 from pathlib import Path
@@ -167,31 +168,23 @@ def convert_jsonl_to_mfa_format(jsonl_path: Path, output_dir: Path):
     文件编号统一为 0000.wav / 0000.lab 格式。
     """
     # 创建输出目录
-    wav_out_dir = output_dir / "wav"
-    lab_out_dir = output_dir / "lab"
-    wav_out_dir.mkdir(parents=True, exist_ok=True)
-    lab_out_dir.mkdir(parents=True, exist_ok=True)
+    # MFA一定要把wav和lab放到一起啊！！！
     with open(jsonl_path, "r", encoding="utf-8") as f:
         for idx, line in enumerate(tqdm(f, desc=f"转换中: {jsonl_path.name}")):
             data = json.loads(line)
             audio_path = Path(data["wav_path"]).resolve(strict=False)
             text = data["text"]
-            # 检查音频是否存在
             if not audio_path.exists():
                 print(f"⚠️ 音频文件不存在: {audio_path}，已跳过")
                 continue
-            # 统一编号为 0000.wav / 0000.lab
             file_id = f"{idx:04d}"
             # 拷贝音频
-            wav_dst = wav_out_dir / f"{file_id}.wav"
+            wav_dst = output_dir / f"{file_id}.wav"
             shutil.copy(audio_path, wav_dst)
             # 写入 lab 文件
-            lab_dst = lab_out_dir / f"{file_id}.lab"
+            lab_dst = output_dir / f"{file_id}.lab"
             with open(lab_dst, "w", encoding="utf-8") as lab_file:
                 lab_file.write(text.strip())
-    print(f"✅ 已完成转换，共处理 {idx + 1} 条样本。")
-    print(f"➡️ WAV 文件输出目录: {wav_out_dir}")
-    print(f"➡️ LAB 文件输出目录: {lab_out_dir}")
 
 
 # ======================== MFA对齐 ========================
@@ -249,19 +242,27 @@ def main():
     train_jsonl = PROCESSED_DATASET_DIR / "train.jsonl"
     train_mfa_out_dir = PROCESSED_DATASET_DIR / "mfa_train_data"
     convert_jsonl_to_mfa_format(train_jsonl, train_mfa_out_dir)
-    # 处理验证集（可选）
+    # 处理验证集
     val_jsonl = PROCESSED_DATASET_DIR / "val.jsonl"
     val_mfa_out_dir = PROCESSED_DATASET_DIR / "mfa_val_data"
     convert_jsonl_to_mfa_format(val_jsonl, val_mfa_out_dir)
 
     # 运行 MFA
-    mfa_output = PROCESSED_DATASET_DIR / "mfa_output"
-    mfa_output.mkdir(parents=True, exist_ok=True)
+    mfa_output_val = PROCESSED_DATASET_DIR / "mfa_output_val"
+    mfa_output_val.mkdir(parents=True, exist_ok=True)
     run_mfa_align(
         mfa_input_dir=val_mfa_out_dir,  # 包含 wav/lab 的路径
-        dict="mandarin_erhua_mfa",  # ✅ 直接用模型名字符串
-        model="mandarin_mfa",  # ✅ 直接用模型名字符串
-        output_dir=mfa_output  # 输出 TextGrid 路径
+        dict=MFA_DICT,  # ✅ 直接用模型名字符串
+        model=MFA_ZIP,  # ✅ 直接用模型名字符串
+        output_dir=mfa_output_val  # 输出 TextGrid 路径
+    )
+    mfa_output_train = PROCESSED_DATASET_DIR / "mfa_output_train"
+    mfa_output_train.mkdir(parents=True, exist_ok=True)
+    run_mfa_align(
+        mfa_input_dir=train_mfa_out_dir,  # 包含 wav/lab 的路径
+        dict=MFA_DICT,  # ✅ 直接用模型名字符串
+        model=MFA_ZIP,  # ✅ 直接用模型名字符串
+        output_dir=mfa_output_train  # 输出 TextGrid 路径
     )
 
 

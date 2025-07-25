@@ -20,9 +20,11 @@ logs/
 runs/
 tensorboard_logs/
 
-#输出内容
+# 输出内容
 output/
 
+# 外部工具
+utils/MFA
 
 # 虚拟环境文件
 venv/
