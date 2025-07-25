@@ -169,6 +169,7 @@ def convert_jsonl_to_mfa_format(jsonl_path: Path, output_dir: Path):
     """
     # 创建输出目录
     # MFA一定要把wav和lab放到一起啊！！！
+    output_dir.mkdir(parents=True, exist_ok=True)
     with open(jsonl_path, "r", encoding="utf-8") as f:
         for idx, line in enumerate(tqdm(f, desc=f"转换中: {jsonl_path.name}")):
             data = json.loads(line)
@@ -184,7 +185,8 @@ def convert_jsonl_to_mfa_format(jsonl_path: Path, output_dir: Path):
             # 写入 lab 文件
             lab_dst = output_dir / f"{file_id}.lab"
             with open(lab_dst, "w", encoding="utf-8") as lab_file:
-                lab_file.write(text.strip())
+                spaced_text = " ".join(list(text.strip()))
+                lab_file.write(spaced_text)
 
 
 # ======================== MFA对齐 ========================

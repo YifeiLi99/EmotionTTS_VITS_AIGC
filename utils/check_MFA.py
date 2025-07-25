@@ -2,8 +2,9 @@ from pathlib import Path
 import chardet
 
 # ===== 用户配置部分 =====
-USE_SUBFOLDERS = True  # 如果是 wav/ 和 lab/ 分开，请设为 True
+USE_SUBFOLDERS = False  # 如果是 wav/ 和 lab/ 混在一起，请设为 False
 ROOT_DIR = Path("D:/lyf/EmotionTTS_VITS_AIGC/data/processed/EMOVIE_DATASET/mfa_val_data")
+DICT_PATH = Path("C:/Users/admin/Documents/MFA/mfa_val_data/dictionary/1_mandarin_mfa/words.txt")
 
 if USE_SUBFOLDERS:
     WAV_DIR = ROOT_DIR / "wav"
@@ -28,6 +29,10 @@ print(f"✅ LAB 文件数量: {len(lab_files)}")
 print(f"❌ 缺失 .lab 文件: {len(missing_labs)} 条，如: {list(missing_labs)[:5]}")
 print(f"❌ 缺失 .wav 文件: {len(missing_wavs)} 条，如: {list(missing_wavs)[:5]}")
 
+# 加载合法汉字集合
+with open(DICT_PATH, 'r', encoding='utf-8') as f:
+    dict_words = set(line.strip().split()[0] for line in f if not line.startswith('<'))
+
 # 检查 lab 文件内容
 print("\n========== .lab 内容合法性检查 ==========")
 illegal_labs = []
@@ -39,12 +44,14 @@ for lab in LAB_DIR.glob("*.lab"):
     detected = chardet.detect(raw_bytes)
     encoding = detected['encoding']
     try:
-        # 尝试 UTF-8 解码
         text = raw_bytes.decode('utf-8').strip()
         if not text:
             empty_labs.append(lab.name)
-        elif any(c in text for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,?!；，。？！"):
-            illegal_labs.append((lab.name, text))
+        else:
+            chars = text.split()
+            illegal_chars = [c for c in chars if c not in dict_words]
+            if illegal_chars:
+                illegal_labs.append((lab.name, text, illegal_chars))
     except UnicodeDecodeError as e:
         bad_encoding.append((lab.name, encoding))
 
@@ -54,11 +61,11 @@ if empty_labs:
     for name in empty_labs:
         print(f"[空白] {name}")
 
-print(f"\n❌ 包含非法字符 .lab 文件: {len(illegal_labs)}")
+print(f"\n❌ 包含词典缺失字符的 .lab 文件: {len(illegal_labs)}")
 if illegal_labs:
-    print("--- 非法字符文件列表（全部列出） ---")
-    for name, text in illegal_labs:
-        print(f"[非法字符] {name}: {text}")
+    print("--- 缺失字符文件列表（全部列出） ---")
+    for name, text, missing in illegal_labs:
+        print(f"[缺失] {name}: {text} ｜ 缺失字: {missing}")
 
 print(f"\n❌ 非 UTF-8 编码 .lab 文件: {len(bad_encoding)}")
 if bad_encoding:
