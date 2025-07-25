@@ -1,24 +1,40 @@
 import os
 import torch
+from pathlib import Path
 
 # ========== 基础路径设置 ==========
-ROOT = os.path.abspath(os.path.dirname(__file__))
+ROOT = Path(__file__).resolve().parent
 
-# 数据路径（根据你的项目结构自定义）
-DATA_ROOT = os.path.join(ROOT, "data")
-RAW_DIR = os.path.join(DATA_ROOT, "raw")
-PROCESSED_DIR = os.path.join(DATA_ROOT, "processed")
+# ========== 数据路径 ==========
+DATA_ROOT = ROOT / "data"
+RAW_DIR = DATA_ROOT / "raw"
+PROCESSED_DIR = DATA_ROOT / "processed"
 
-RAW_DATA_DIR = os.path.join(RAW_DIR, "EMOVIE DATASET", "wavs")  # 原始音频路径
-RAW_LABELS_FILE = os.path.join(RAW_DIR, "EMOVIE DATASET", "labels.csv")  # labels.csv 路径
+# 当前使用数据集 (可更改)
+NOW_DATASET = RAW_DIR / "EMOVIE_DATASET"
+# 处理后的数据集目录 (可更改)
+PROCESSED_DATASET_DIR = PROCESSED_DIR / "EMOVIE_DATASET"
+PROCESSED_DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
-# 模型输出路径
+# 原始音频路径
+RAW_DATA_DIR = NOW_DATASET / "wavs"
+# labels.csv 路径
+RAW_LABELS_FILE = NOW_DATASET / "labels.csv"
+
+
+
+
+# ========== 模型输出路径 ==========
 WEIGHTS_DIR = os.path.join(ROOT, "weights")  # 训练好的模型保存路径
 os.makedirs(WEIGHTS_DIR, exist_ok=True)
 
-# 训练日志路径
+
+
+# ========== 训练日志路径 ==========
 LOG_DIR = "logs"
 os.makedirs(LOG_DIR, exist_ok=True)
+
+
 # =========== 选择模型 ===================
 MODEL_TYPE = "full"
 
