@@ -90,12 +90,14 @@ def convert_labels_to_jsonl(wav_dir: Path, csv_path: Path, jsonl_path: Path, pol
         reader = csv.DictReader(csvfile)
         for row in reader:
             wav_filename = row['filename']
+
             def remove_chinese_punctuation(text: str) -> str:
                 """
                 移除中文及全角标点符号
                 """
                 punctuation_pattern = r"[。？！，、；：“”‘’（）《》〈〉【】『』「」﹏…—～·]"
                 return re.sub(punctuation_pattern, "", text)
+
             # 处理文本内容
             text = remove_chinese_punctuation(row['text'].strip())
             try:
@@ -192,7 +194,26 @@ def convert_jsonl_to_mfa_format(jsonl_path: Path, output_dir: Path):
     print(f"➡️ LAB 文件输出目录: {lab_out_dir}")
 
 
-# ======================== 111 ========================
+# ======================== MFA对齐 ========================
+def run_mfa_align(mfa_input_dir: Path, dict, model, output_dir: Path):
+    """
+    调用 MFA 对音频 + 文本进行强制对齐
+    """
+    command = [
+        "mfa", "align",
+        str(mfa_input_dir),
+        str(dict),
+        str(model),
+        str(output_dir),
+        "--clean", "--verbose"
+    ]
+    print(f"🚀 正在运行 MFA 对齐命令: {' '.join(command)}")
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    if result.returncode == 0:
+        print(f"✅ MFA 对齐完成，输出目录: {output_dir}")
+    else:
+        print(f"❌ MFA 对齐失败:\n{result.stderr}")
 
 
 # ======================== 111 ========================
@@ -232,6 +253,16 @@ def main():
     val_jsonl = PROCESSED_DATASET_DIR / "val.jsonl"
     val_mfa_out_dir = PROCESSED_DATASET_DIR / "mfa_val_data"
     convert_jsonl_to_mfa_format(val_jsonl, val_mfa_out_dir)
+
+    # 运行 MFA
+    mfa_output = PROCESSED_DATASET_DIR / "mfa_output"
+    mfa_output.mkdir(parents=True, exist_ok=True)
+    run_mfa_align(
+        mfa_input_dir=val_mfa_out_dir,  # 包含 wav/lab 的路径
+        dict="mandarin_erhua_mfa",  # ✅ 直接用模型名字符串
+        model="mandarin_mfa",  # ✅ 直接用模型名字符串
+        output_dir=mfa_output  # 输出 TextGrid 路径
+    )
 
 
 # ======================== 一键执行 ========================
