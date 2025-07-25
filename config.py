@@ -22,17 +22,15 @@ RAW_DATA_DIR = NOW_DATASET / "wavs"
 RAW_LABELS_FILE = NOW_DATASET / "labels.csv"
 
 
-
-
 # ========== 模型输出路径 ==========
-WEIGHTS_DIR = os.path.join(ROOT, "weights")  # 训练好的模型保存路径
-os.makedirs(WEIGHTS_DIR, exist_ok=True)
+WEIGHTS_DIR = ROOT / "weights"  # 训练好的模型保存路径
+WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 
 # ========== 训练日志路径 ==========
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
+LOG_DIR = ROOT / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # =========== 选择模型 ===================

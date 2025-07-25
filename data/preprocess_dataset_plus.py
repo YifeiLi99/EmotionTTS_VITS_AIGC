@@ -10,12 +10,15 @@ import shutil
 from pathlib import Path
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
+import random
+
 
 # ======================== 采样率与频道统一 ========================
 def check_ffmpeg():
     """检查 ffmpeg 是否可用"""
     if not shutil.which("ffmpeg"):
         raise EnvironmentError("❌ ffmpeg 未安装或未加入系统环境变量 PATH")
+
 
 def _convert_single_wav(wav_file: Path, out_path: Path, sr: int, channels: int) -> bool:
     """处理单个音频文件的转换逻辑"""
@@ -32,6 +35,7 @@ def _convert_single_wav(wav_file: Path, out_path: Path, sr: int, channels: int) 
     ]
     result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return result.returncode == 0  # True 表示成功
+
 
 def convert_wavs(src_dir: Path, dst_dir: Path, sr: int = 16000, channels: int = 1, num_workers: int = 8):
     """
@@ -54,8 +58,9 @@ def convert_wavs(src_dir: Path, dst_dir: Path, sr: int = 16000, channels: int = 
                 success_count += 1
     return success_count
 
+
 # ======================== JSONL文件编写 ========================
-def save_polarity_map(label_map_path):
+def save_polarity_map(label_map_path: Path):
     """
     保存情绪标签与极性数值的映射表。
     当前仅支持五类，未来可扩展为更多细致情绪。
@@ -75,7 +80,8 @@ def save_polarity_map(label_map_path):
     polarity_to_emotion = {f"{v:.1f}": k for k, v in emotion_to_polarity.items()}
     return polarity_to_emotion
 
-def convert_labels_to_jsonl(wav_dir, csv_path, jsonl_path, polarity_map):
+
+def convert_labels_to_jsonl(wav_dir: Path, csv_path: Path, jsonl_path: Path, polarity_map: dict):
     """读取 CSV 标签并结合 wav_dir 生成 JSONL 数据集"""
     num_written = 0
     with open(csv_path, 'r', encoding='utf-8') as csvfile, \
@@ -107,20 +113,58 @@ def convert_labels_to_jsonl(wav_dir, csv_path, jsonl_path, polarity_map):
             num_written += 1
     print(f"✅ 处理完成，共写入 {num_written} 条样本到: {jsonl_path}")
 
+
+# ======================== 划分数据集 ========================
+def split_jsonl_dataset(
+        source_jsonl: Path,
+        save_dir: Path,
+        train_ratio: float = 0.7,
+        val_ratio: float = 0.2,
+        test_ratio: float = 0.1,
+        seed: int = 42):
+    """
+    将一个 JSONL 格式的完整数据集划分为 train / val / test 三个子集
+    """
+    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "比例加起来应为1"
+    # ========== 加载原始 JSONL 数据 ==========
+    with open(source_jsonl, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    print(f"原始数据总数: {len(lines)} 条")
+
+    # ========== 随机打乱并划分 ==========
+    random.seed(seed)
+    random.shuffle(lines)
+
+    total = len(lines)
+    num_train = int(total * train_ratio)
+    num_val = int(total * val_ratio)
+    num_test = total - num_train - num_val  # 剩余全部划入 test
+
+    # 拆分三部分数据
+    train_data = lines[:num_train]
+    val_data = lines[num_train:num_train + num_val]
+    test_data = lines[num_train + num_val:]
+
+    # ========== 保存函数 ==========
+    def save_jsonl(filepath: Path, data):
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.writelines(data)
+        print(f"✅ 已保存 {filepath}（{len(data)} 条样本）")
+
+    # ========== 保存至目标目录 ==========
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_jsonl(save_dir / "train.jsonl", train_data)
+    save_jsonl(save_dir / "val.jsonl", val_data)
+    save_jsonl(save_dir / "test.jsonl", test_data)
+
+
 # ======================== 111 ========================
 
 
-
 # ======================== 111 ========================
 
 
-
 # ======================== 111 ========================
-
-
-
-# ======================== 111 ========================
-
 
 
 # ======================== 主函数 ========================
@@ -142,6 +186,14 @@ def main():
     polarity_map = save_polarity_map(label_map_path)
     # 处理音频文字对应JSONL
     convert_labels_to_jsonl(dst_dir, RAW_LABELS_FILE, jsonl_path, polarity_map)
+
+    # 划开数据集为三种
+    split_jsonl_dataset(
+        source_jsonl=jsonl_path,
+        save_dir=PROCESSED_DATASET_DIR
+    )
+
+
 # ======================== 一键执行 ========================
 if __name__ == "__main__":
     main()
