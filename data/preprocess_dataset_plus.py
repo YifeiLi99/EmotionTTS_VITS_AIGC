@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 import random
+import re
 
 
 # ======================== 采样率与频道统一 ========================
@@ -89,7 +90,14 @@ def convert_labels_to_jsonl(wav_dir: Path, csv_path: Path, jsonl_path: Path, pol
         reader = csv.DictReader(csvfile)
         for row in reader:
             wav_filename = row['filename']
-            text = row['text'].strip()
+            def remove_chinese_punctuation(text: str) -> str:
+                """
+                移除中文及全角标点符号
+                """
+                punctuation_pattern = r"[。？！，、；：“”‘’（）《》〈〉【】『』「」﹏…—～·]"
+                return re.sub(punctuation_pattern, "", text)
+            # 处理文本内容
+            text = remove_chinese_punctuation(row['text'].strip())
             try:
                 polarity_float = float(row['polarity_label'])
                 polarity_key = f"{polarity_float:.1f}"
@@ -115,13 +123,8 @@ def convert_labels_to_jsonl(wav_dir: Path, csv_path: Path, jsonl_path: Path, pol
 
 
 # ======================== 划分数据集 ========================
-def split_jsonl_dataset(
-        source_jsonl: Path,
-        save_dir: Path,
-        train_ratio: float = 0.7,
-        val_ratio: float = 0.2,
-        test_ratio: float = 0.1,
-        seed: int = 42):
+def split_jsonl_dataset(source_jsonl: Path, save_dir: Path, train_ratio: float = 0.7, val_ratio: float = 0.2,
+                        test_ratio: float = 0.1, seed: int = 42):
     """
     将一个 JSONL 格式的完整数据集划分为 train / val / test 三个子集
     """
@@ -130,35 +133,63 @@ def split_jsonl_dataset(
     with open(source_jsonl, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     print(f"原始数据总数: {len(lines)} 条")
-
     # ========== 随机打乱并划分 ==========
     random.seed(seed)
     random.shuffle(lines)
-
     total = len(lines)
     num_train = int(total * train_ratio)
     num_val = int(total * val_ratio)
     num_test = total - num_train - num_val  # 剩余全部划入 test
-
     # 拆分三部分数据
     train_data = lines[:num_train]
     val_data = lines[num_train:num_train + num_val]
     test_data = lines[num_train + num_val:]
 
-    # ========== 保存函数 ==========
+    #  保存函数
     def save_jsonl(filepath: Path, data):
         with open(filepath, 'w', encoding='utf-8') as f:
             f.writelines(data)
         print(f"✅ 已保存 {filepath}（{len(data)} 条样本）")
 
-    # ========== 保存至目标目录 ==========
+    #  保存至目标目录
     save_dir.mkdir(parents=True, exist_ok=True)
     save_jsonl(save_dir / "train.jsonl", train_data)
     save_jsonl(save_dir / "val.jsonl", val_data)
     save_jsonl(save_dir / "test.jsonl", test_data)
 
 
-# ======================== 111 ========================
+# ======================== 转化MFA适用格式 ========================
+def convert_jsonl_to_mfa_format(jsonl_path: Path, output_dir: Path):
+    """
+    将 jsonl 文件转换为 MFA 格式的 wav + lab 文件。
+    文件编号统一为 0000.wav / 0000.lab 格式。
+    """
+    # 创建输出目录
+    wav_out_dir = output_dir / "wav"
+    lab_out_dir = output_dir / "lab"
+    wav_out_dir.mkdir(parents=True, exist_ok=True)
+    lab_out_dir.mkdir(parents=True, exist_ok=True)
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for idx, line in enumerate(tqdm(f, desc=f"转换中: {jsonl_path.name}")):
+            data = json.loads(line)
+            audio_path = Path(data["wav_path"]).resolve(strict=False)
+            text = data["text"]
+            # 检查音频是否存在
+            if not audio_path.exists():
+                print(f"⚠️ 音频文件不存在: {audio_path}，已跳过")
+                continue
+            # 统一编号为 0000.wav / 0000.lab
+            file_id = f"{idx:04d}"
+            # 拷贝音频
+            wav_dst = wav_out_dir / f"{file_id}.wav"
+            shutil.copy(audio_path, wav_dst)
+            # 写入 lab 文件
+            lab_dst = lab_out_dir / f"{file_id}.lab"
+            with open(lab_dst, "w", encoding="utf-8") as lab_file:
+                lab_file.write(text.strip())
+    print(f"✅ 已完成转换，共处理 {idx + 1} 条样本。")
+    print(f"➡️ WAV 文件输出目录: {wav_out_dir}")
+    print(f"➡️ LAB 文件输出目录: {lab_out_dir}")
 
 
 # ======================== 111 ========================
@@ -192,6 +223,15 @@ def main():
         source_jsonl=jsonl_path,
         save_dir=PROCESSED_DATASET_DIR
     )
+
+    # 处理训练集
+    train_jsonl = PROCESSED_DATASET_DIR / "train.jsonl"
+    train_mfa_out_dir = PROCESSED_DATASET_DIR / "mfa_train_data"
+    convert_jsonl_to_mfa_format(train_jsonl, train_mfa_out_dir)
+    # 处理验证集（可选）
+    val_jsonl = PROCESSED_DATASET_DIR / "val.jsonl"
+    val_mfa_out_dir = PROCESSED_DATASET_DIR / "mfa_val_data"
+    convert_jsonl_to_mfa_format(val_jsonl, val_mfa_out_dir)
 
 
 # ======================== 一键执行 ========================
