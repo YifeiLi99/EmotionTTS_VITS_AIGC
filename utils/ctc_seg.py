@@ -1,6 +1,7 @@
 import os
 import torch
 import torchaudio
+import json
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 from ctc_segmentation import (
     ctc_segmentation,
@@ -8,7 +9,6 @@ from ctc_segmentation import (
     prepare_text,
     determine_utterance_segments
 )
-import json
 
 # ===================== 配置路径 =====================
 MODEL_NAME = "jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn"
@@ -18,59 +18,74 @@ OUTPUT_PATH = "duration.json"     # 输出帧级时长对齐结果
 
 # ===================== 加载模型 =====================
 print("[INFO] 加载模型...")
-processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
-model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
-model.eval()
+try:
+    processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
+    model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
+    model.eval()
+except Exception as e:
+    raise RuntimeError(f"[ERROR] 模型加载失败: {e}")
 
 # ===================== 加载文本 =====================
 with open(TXT_PATH, "r", encoding="utf-8") as f:
     transcript = f.read().strip().replace(" ", "")
     if not transcript:
-        raise ValueError("输入文本为空")
+        raise ValueError("[ERROR] 输入文本为空")
+    transcript_chars = list(transcript)
 
 # ===================== 加载音频 =====================
 wav, sr = torchaudio.load(WAV_PATH)
 if sr != 16000:
-    raise ValueError("音频采样率必须为16kHz")
+    raise ValueError("[ERROR] 音频采样率必须为16kHz")
 
 # ===================== 推理 logits =====================
 print("[INFO] 推理生成 logits...")
 inputs = processor(wav.squeeze(), sampling_rate=16000, return_tensors="pt", padding=True)
 with torch.no_grad():
     logits = model(**inputs).logits
-log_probs = torch.nn.functional.log_softmax(logits[0], dim=-1).cpu().numpy()  # [T, V]
+log_probs = torch.nn.functional.log_softmax(logits[0], dim=-1).cpu().numpy()
+print("[DEBUG] log_probs.shape:", log_probs.shape)
 
 # ===================== 构造 CTC 参数 =====================
 print("[INFO] 构建 CTC 分割参数...")
 config = CtcSegmentationParameters()
 
-# 设置 index_duration（每帧持续时间）
-if hasattr(processor.feature_extractor, "hop_length"):
-    config.index_duration = processor.feature_extractor.hop_length / processor.feature_extractor.sampling_rate
-else:
-    config.index_duration = 20 / 1000  # fallback: assume 20ms per frame
+# 设置 index_duration
+try:
+    hop_length = getattr(processor.feature_extractor, "hop_length", None)
+    sr = processor.feature_extractor.sampling_rate
+    if hop_length is not None:
+        config.index_duration = hop_length / sr
+    else:
+        config.index_duration = 20 / 1000  # 默认 20ms 每帧
+except Exception:
+    config.index_duration = 20 / 1000
 
+# 获取字符列表
 char_list = processor.tokenizer.convert_ids_to_tokens(list(range(len(processor.tokenizer))))
+print("[DEBUG] 模型词表样例:", char_list[:20])
 
-# ===================== 字符映射 & 准备文本 =====================
-transcript_clean = list(transcript)  # 拆成单字列表
-
-# 检查每个字是否在字典中可以对齐
-valid_chars = [c for c in transcript_clean if c in char_list]
+# 筛选 transcript 中合法字符
+valid_chars = [c for c in transcript_chars if c in char_list]
+print("[DEBUG] 有效字符:", valid_chars)
 if len(valid_chars) == 0:
-    raise ValueError("输入文本中的字无法映射到模型的 vocabulary 中。请确认字符集是否兼容。")
+    raise ValueError("❌ 输入文本无法与模型词表对齐，请检查字符集")
 
+# 准备 ground truth
 gt, utt_begin_indices = prepare_text(config, valid_chars, char_list)
 
 # ===================== 计算对齐 =====================
 print("[INFO] 执行 CTC 对齐...")
-_, timings, alignments = ctc_segmentation(config, log_probs, gt)
-segments = determine_utterance_segments(config, utt_begin_indices, alignments, timings, valid_chars)
+try:
+    _, timings, char_probs = ctc_segmentation(config, log_probs, gt)
+    segments = determine_utterance_segments(config, utt_begin_indices, char_probs, timings, valid_chars)
+except Exception as e:
+    raise RuntimeError(f"[ERROR] 对齐失败: {e}")
 
 # ===================== 写入输出 =====================
 print("[INFO] 写入 duration.json")
 duration_info = []
-for i, (start, end, char, _, _) in enumerate(segments):
+for seg in segments:
+    start, end, char = seg[:3]
     if char == "" or isinstance(char, float):
         continue
     duration_info.append({

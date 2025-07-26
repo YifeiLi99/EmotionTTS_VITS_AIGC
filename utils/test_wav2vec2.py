@@ -3,7 +3,8 @@ import torchaudio
 import torch
 
 # 模型选择：使用 jonatasgrosman 提供的 fine-tuned 模型
-MODEL_NAME = "jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn"
+#MODEL_NAME = "jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn"
+MODEL_NAME = "wbbbbb/wav2vec2-large-chinese-zh-cn"
 
 processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
 model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
