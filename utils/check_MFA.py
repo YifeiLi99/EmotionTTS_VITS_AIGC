@@ -3,8 +3,8 @@ import chardet
 
 # ===== 用户配置部分 =====
 USE_SUBFOLDERS = False  # 如果是 wav/ 和 lab/ 混在一起，请设为 False
-ROOT_DIR = Path("D:/lyf/EmotionTTS_VITS_AIGC/data/processed/EMOVIE_DATASET/mfa_val_data")
-DICT_PATH = Path("C:/Users/admin/Documents/MFA/mfa_val_data/dictionary/1_mandarin_mfa/words.txt")
+ROOT_DIR = Path("D:/lyf/EmotionTTS_VITS_AIGC/data/processed/EMOVIE_DATASET/mfa_train_data")
+DICT_PATH = Path("C:/Users/admin/Documents/MFA/mfa_train_data/dictionary/1_mandarin_mfa/words.txt")
 
 if USE_SUBFOLDERS:
     WAV_DIR = ROOT_DIR / "wav"
